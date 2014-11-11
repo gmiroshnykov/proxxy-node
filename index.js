@@ -1,6 +1,7 @@
 var http = require('http'),
     https = require('https');
 var knox = require('knox'),
+    memoize = require('memoizee'),
     s3UrlSigner = require('amazon-s3-url-signer'),
     debug = require('debug')('proxxy');
 var config = require('./config');
@@ -54,7 +55,7 @@ function handleRequest(req, res) {
 
   console.log('request:', ctx);
 
-  return isAvailableOnS3(ctx, function(err, isAvailable) {
+  return memoizedIsAvailableOnS3(ctx, function(err, isAvailable) {
     if (err) {
       console.error('isAvailableOnS3 error:', err);
       return sendError(ctx, 500, 'isAvailableOnS3 error');
@@ -145,20 +146,7 @@ function getHttpClientForUrl(url) {
   }
 }
 
-function getCacheKey(ctx) {
-  return ctx.region + ':' + getS3Path(ctx.backend, ctx.url);
-}
-
-// TODO: replace by a more sophisticated LRU cache
-var cacheAvailableOnS3 = {};
 function isAvailableOnS3(ctx, callback) {
-  var cacheKey = getCacheKey(ctx);
-  if (cacheKey in cacheAvailableOnS3) {
-    return process.nextTick(function() {
-      return callback(null, true);
-    });
-  }
-
   var s3 = getS3ClientForRegion(ctx.region);
   var s3path = getS3Path(ctx.backend, ctx.url);
   var reqS3Head = s3.head(s3path);
@@ -172,7 +160,6 @@ function isAvailableOnS3(ctx, callback) {
         return callback(null, false);
 
       case 200:
-        cacheAvailableOnS3[cacheKey] = true;
         return callback(null, true);
 
       default:
@@ -183,6 +170,14 @@ function isAvailableOnS3(ctx, callback) {
   reqS3Head.on('error', callback);
   reqS3Head.end();
 }
+
+var memoizedIsAvailableOnS3 = memoize(isAvailableOnS3, {
+  async: true,
+  primitive: true,
+  maxAge: 60000,
+  preFetch: true,
+  max: 10240
+});
 
 var s3Clients = {};
 function getS3ClientForRegion(region) {
