@@ -7,6 +7,10 @@ var config = require('./config');
 
 var DEFAULT_REGION = 'use1';
 var DEFAULT_TTL = 3600;
+var DEFAULT_AGENT_MAX_SOCKETS = 25;
+
+http.globalAgent.maxSockets = DEFAULT_AGENT_MAX_SOCKETS;
+https.globalAgent.maxSockets = DEFAULT_AGENT_MAX_SOCKETS;
 
 var server = http.createServer();
 server.on('request', handleRequest);

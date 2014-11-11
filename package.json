@@ -2,6 +2,7 @@
   "name": "proxxy-node",
   "version": "0.0.0",
   "description": "",
+  "repository": "git@github.com:laggyluke/proxxy-node.git",
   "main": "index.js",
   "dependencies": {
     "amazon-s3-url-signer": "0.0.7",
