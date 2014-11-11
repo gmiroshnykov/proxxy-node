@@ -16,7 +16,9 @@ server.listen(config.port, config.host, function(err) {
   console.log('listening on %s:%d', address.address, address.port);
 });
 
-var signer = s3UrlSigner.urlSigner(config.s3.key, config.s3.secret);
+var signer = s3UrlSigner.urlSigner(config.s3.key, config.s3.secret, {
+  protocol: 'https'
+});
 
 function handleRequest(req, res) {
   if (req.method !== 'GET') {
@@ -48,7 +50,32 @@ function handleRequest(req, res) {
 
   console.log('request:', ctx);
 
-  return checkIfAvailableOnS3(res, ctx);
+  return isAvailableOnS3(ctx, function(err, isAvailable) {
+    if (err) {
+      console.error('isAvailableOnS3 error:', err);
+      return sendError(ctx, 500, 'isAvailableOnS3 error');
+    }
+
+    if (isAvailable) {
+      return redirectToS3(res, ctx);
+    } else {
+      return uploadToS3(ctx, function(err) {
+        if (err) {
+          if (err.res) {
+            // backend returned non-200 status code, simply pass it through
+            console.log('response: HTTP %s (passthrough)', err.res.statusCode);
+            res.writeHead(err.res.statusCode, err.res.headers);
+            return err.res.pipe(res);
+          }
+
+          console.error('uploadToS3 error:', err);
+          return sendError(ctx, 500, 'uploadToS3 error');
+        }
+
+        return redirectToS3(res, ctx);
+      })
+    }
+  });
 }
 
 function sendError(res, code, message) {
@@ -98,7 +125,7 @@ function getSignedS3Url(region, backend, url) {
   var bucket = 'proxxy-' + region;
   var path = backend + indexify(url);
   var ttl = backendOptions.ttl || DEFAULT_TTL;
-  return signer.getUrl('GET', path, bucket, backendOptions.ttl);
+  return signer.getUrl('GET', path, bucket, ttl);
 }
 
 function getBackendUrl(backend, url) {
@@ -120,10 +147,12 @@ function getCacheKey(ctx) {
 
 // TODO: replace by a more sophisticated LRU cache
 var cacheAvailableOnS3 = {};
-function checkIfAvailableOnS3(res, ctx) {
+function isAvailableOnS3(ctx, callback) {
   var cacheKey = getCacheKey(ctx);
   if (cacheKey in cacheAvailableOnS3) {
-    return redirectToS3(res, ctx);
+    return process.nextTick(function() {
+      return callback(null, true);
+    });
   }
 
   var s3 = getS3ClientForRegion(ctx.region);
@@ -136,22 +165,18 @@ function checkIfAvailableOnS3(res, ctx) {
 
     switch (resS3Head.statusCode) {
       case 404:
-        return uploadToS3(res, ctx);
+        return callback(null, false);
 
       case 200:
         cacheAvailableOnS3[cacheKey] = true;
-        return redirectToS3(res, ctx);
+        return callback(null, true);
 
       default:
-        var message = 'unknown S3 HEAD status code: ' + resS3Head.statusCode;
-        console.error(message);
-        return sendError(res, 500, message);
+        var err = new Error('unknown S3 HEAD status code: ' + resS3Head.statusCode);
+        return callback(err);
     }
   });
-  reqS3Head.on('error', function(err) {
-    console.error('unknown reqS3Head error:', err);
-    return sendError(res, 500, 'unknown reqS3Head error');
-  });
+  reqS3Head.on('error', callback);
   reqS3Head.end();
 }
 
@@ -172,90 +197,93 @@ function getS3ClientForRegion(region) {
   return s3Clients[region];
 }
 
-function uploadToS3(res, ctx) {
+function uploadToS3(ctx, callback) {
   var backendUrl = getBackendUrl(ctx.backend, ctx.url);
+  debug('Backend GET: %s', backendUrl);
   var client = getHttpClientForUrl(backendUrl);
-  var reqGetBackend = client.get(backendUrl, function(resGetBackend) {
-    resGetBackend.on('error', function(err) {
-      console.error('unknown resGetBackend error:', err);
-      return sendError(res, 500, 'unknown resGetBackend error');
-    });
+  var reqGetBackend = client.get(backendUrl);
+  reqGetBackend.on('error', callback);
+  reqGetBackend.on('response', function(resGetBackend) {
+    resGetBackend.on('error', callback);
 
     debug('resGetBackend statusCode:', resGetBackend.statusCode);
     debug('resGetBackend headers:', resGetBackend.headers);
     if (resGetBackend.statusCode !== 200) {
-      res.writeHead(resGetBackend.statusCode, {
-        'content-type': resGetBackend.headers['content-type'],
-        'content-length': resGetBackend.headers['content-length']
-      });
-      return resGetBackend.pipe(res);
+      var err = new Error('unknown backend status code: ' + resGetBackend.statusCode);
+      err.res = resGetBackend;
+      return callback(err);
     }
-
-    var s3 = getS3ClientForRegion(ctx.region);
-    var s3path = getS3Path(ctx.backend, ctx.url);
 
     if ('content-length' in resGetBackend.headers) {
-      debug('streaming S3 PUT:', s3path);
-      var s3headers = {
-        'content-type': resGetBackend.headers['content-type'],
-        'content-length': resGetBackend.headers['content-length']
-      };
-
-      var reqPutS3 = s3.put(s3path, s3headers);
-      resGetBackend.pipe(reqPutS3);
-      next(reqPutS3);
+      return streamingUploadToS3(ctx, resGetBackend, callback);
     } else {
-      debug('buffered S3 PUT:', s3path);
-      var buffer;
-      resGetBackend.on('data', function(chunk) {
-        buffer = buffer ? Buffer.concat([buffer, chunk]) : chunk;
-      });
-      resGetBackend.on('end', function() {
-        var s3headers = {
-          'content-type': resGetBackend.headers['content-type'],
-          'content-length': buffer.length
-        };
-
-        var reqPutS3 = s3.put(s3path, s3headers);
-        reqPutS3.end(buffer);
-        next(reqPutS3);
-      });
-    }
-
-    function next(reqPutS3) {
-      reqPutS3.on('response', function(resPutS3) {
-        debug('resPutS3 statusCode:', resPutS3.statusCode);
-        debug('resPutS3 headers:', resPutS3.headers);
-        switch (resPutS3.statusCode) {
-          case 200:
-            var cacheKey = getCacheKey(ctx);
-            cacheAvailableOnS3[cacheKey] = true;
-            return redirectToS3(res, ctx);
-
-          default:
-            var body = '';
-            resPutS3.setEncoding('utf8');
-            resPutS3.on('data', function(chunk) {
-              body += chunk;
-            });
-            resPutS3.on('end', function() {
-              var message = 'unknown S3 PUT staus code: ' + resPutS3.statusCode + "\n";
-              message += 'body: ' + body;
-              console.error(message);
-              return sendError(res, 500, message);
-            });
-        }
-      });
-      reqPutS3.on('error', function(err) {
-        console.error('unknown reqPutS3 error:', err);
-        return sendError(res, 500, 'unknown reqPutS3 error');
-      });
+      return bufferedUploadToS3(ctx, resGetBackend, callback);
     }
   });
-  reqGetBackend.on('error', function(err) {
-    console.error('unknown reqGetBackend error:', err);
-    return sendError(res, 500, 'unknown reqGetBackend error');
+}
+
+function streamingUploadToS3(ctx, resGetBackend, callback) {
+  var s3path = getS3Path(ctx.backend, ctx.url);
+
+  debug('streaming S3 PUT:', s3path);
+  var s3headers = {
+    'content-type': resGetBackend.headers['content-type'],
+    'content-length': resGetBackend.headers['content-length']
+  };
+
+  var s3 = getS3ClientForRegion(ctx.region);
+  var reqPutS3 = s3.put(s3path, s3headers);
+  reqPutS3.on('error', callback);
+  reqPutS3.on('response', function(resPutS3) {
+    return handleUploadToS3(resPutS3, callback);
   });
+  resGetBackend.pipe(reqPutS3);
+}
+
+function bufferedUploadToS3(ctx, resGetBackend, callback) {
+  var s3path = getS3Path(ctx.backend, ctx.url);
+  debug('buffered S3 PUT:', s3path);
+
+  var buffer;
+  resGetBackend.on('data', function(chunk) {
+    buffer = buffer ? Buffer.concat([buffer, chunk]) : chunk;
+  });
+  resGetBackend.on('end', function() {
+    var s3headers = {
+      'content-type': resGetBackend.headers['content-type'],
+      'content-length': buffer.length
+    };
+
+    var s3 = getS3ClientForRegion(ctx.region);
+    var reqPutS3 = s3.put(s3path, s3headers);
+    reqPutS3.on('error', callback);
+    reqPutS3.on('response', function(resPutS3) {
+      return handleUploadToS3(resPutS3, callback);
+    });
+    reqPutS3.end(buffer);
+  });
+}
+
+function handleUploadToS3(resPutS3, callback) {
+  debug('resPutS3 statusCode:', resPutS3.statusCode);
+  debug('resPutS3 headers:', resPutS3.headers);
+  switch (resPutS3.statusCode) {
+    case 200:
+      return callback(null);
+
+    default:
+      var body = '';
+      resPutS3.setEncoding('utf8');
+      resPutS3.on('data', function(chunk) {
+        body += chunk;
+      });
+      resPutS3.on('end', function() {
+        var message = 'unknown S3 PUT staus code: ' + resPutS3.statusCode + "\n";
+        message += 'body: ' + body;
+        var err = new Error(message);
+        return callback(err);
+      });
+  }
 }
 
 function redirectToS3(res, ctx) {
