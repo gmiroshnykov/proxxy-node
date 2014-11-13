@@ -3,11 +3,15 @@
   "version": "0.0.0",
   "description": "",
   "repository": "git@github.com:laggyluke/proxxy-node.git",
-  "main": "index.js",
+  "main": "lib/server.js",
+  "scripts": {
+    "start": "node index.js"
+  },
   "dependencies": {
     "amazon-s3-url-signer": "0.0.7",
     "debug": "^2.1.0",
     "knox": "^0.9.1",
-    "memoizee": "^0.3.8"
+    "memoizee": "^0.3.8",
+    "q": "^1.1.1"
   }
 }
