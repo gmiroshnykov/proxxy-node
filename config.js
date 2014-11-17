@@ -17,10 +17,12 @@ config.backends = {
 
 config.regions = {
   use1: {
-    region: 'us-east-1'
+    region: 'us-east-1',
+    location: ''
   },
   usw2: {
-    region: 'us-west-2'
+    region: 'us-west-2',
+    location: 'us-west-2'
   }
 };
 
