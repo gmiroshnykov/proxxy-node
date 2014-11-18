@@ -18,10 +18,12 @@ config.backends = {
 config.regions = {
   use1: {
     region: 'us-east-1',
+    endpoint: 's3-external-1.amazonaws.com',
     location: ''
   },
   usw2: {
     region: 'us-west-2',
+    endpoint: 's3-us-west-2.amazonaws.com',
     location: 'us-west-2'
   }
 };
