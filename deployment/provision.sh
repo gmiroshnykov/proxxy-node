@@ -11,7 +11,7 @@ sudo apt-get install -y nodejs
 # rebuild project dependencies
 npm rebuild
 
-sudo cp "$DIR/deployment/upstart.conf" /etc/init/proxxy-node.conf
+sudo cp "$DIR/upstart.conf" /etc/init/proxxy-node.conf
 sudo chown root:root /etc/init/proxxy-node.conf
 sudo chmod 600 /etc/init/proxxy-node.conf
 
