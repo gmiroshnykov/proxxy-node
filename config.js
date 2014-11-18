@@ -6,7 +6,7 @@ config.port = parseInt(process.env.PORT || '8000', 10);
 config.s3 = {
   key: process.env.AWS_ACCESS_KEY,
   secret: process.env.AWS_SECRET_KEY,
-  bucket_prefix: 'proxxy-'
+  bucket_prefix: 'mozilla-releng-proxxy-'
 };
 
 config.backends = {
