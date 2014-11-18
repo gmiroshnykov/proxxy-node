@@ -12,6 +12,15 @@ config.s3 = {
 config.backends = {
   'ftp.mozilla.org': {
     url: 'https://ftp.mozilla.org'
+  },
+  'runtime-binaries.pvt.build.mozilla.org': {
+    url: 'http://runtime-binaries.pvt.build.mozilla.org'
+  },
+  'pypi.pvt.build.mozilla.org': {
+    url: 'http://pypi.pvt.build.mozilla.org'
+  },
+  'pypi.pub.build.mozilla.org': {
+    url: 'http://pypi.pub.build.mozilla.org'
   }
 };
 
