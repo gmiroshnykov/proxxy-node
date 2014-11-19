@@ -1,6 +1,6 @@
 var config = exports;
 
-config.host = process.env.HOST || '0.0.0.0';
+config.host = process.env.HOST || '::';
 config.port = parseInt(process.env.PORT || '8000', 10);
 
 config.s3 = {
