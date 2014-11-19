@@ -4,6 +4,9 @@ cd "$DIR"
 
 export DEBIAN_FRONTEND=noninteractive
 
+# install ntpd (this is critical for short-lived S3 signed URLs)
+sudo apt-get install -y ntpd
+
 # install Node.js
 curl -sL https://deb.nodesource.com/setup | sudo bash -
 sudo apt-get install -y nodejs
