@@ -3,13 +3,15 @@
   "version": "0.0.0",
   "description": "",
   "repository": "git@github.com:laggyluke/proxxy-node.git",
-  "main": "lib/server.js",
+  "main": "lib/app.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node --harmony index.js"
   },
   "dependencies": {
-    "debug": "^2.1.0",
+    "co": "^4.1.0",
+    "debug": "^2.1.1",
     "knox": "^0.9.1",
-    "q": "^1.1.1"
+    "koa": "^0.14.0",
+    "thunkify": "^2.1.2"
   }
 }

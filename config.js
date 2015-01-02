@@ -1,6 +1,6 @@
 var config = exports;
 
-config.host = process.env.HOST || '0.0.0.0';
+config.host = process.env.HOST || '::';
 config.port = parseInt(process.env.PORT || '8000', 10);
 
 config.s3 = {
@@ -46,3 +46,6 @@ if (!config.s3.secret) {
   console.error('Error: AWS_SECRET_KEY not set');
   process.exit(1);
 }
+
+delete process.env.AWS_ACCESS_KEY;
+delete process.env.AWS_SECRET_KEY;
