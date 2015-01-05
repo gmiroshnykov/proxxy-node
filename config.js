@@ -4,9 +4,8 @@ config.host = process.env.HOST || '::';
 config.port = parseInt(process.env.PORT || '8000', 10);
 
 config.s3 = {
-  key: process.env.AWS_ACCESS_KEY,
-  secret: process.env.AWS_SECRET_KEY,
-  bucket_prefix: 'mozilla-releng-proxxy-'
+  bucket_prefix: process.env.S3_BUCKET_PREFIX || 'mozilla-releng-proxxy-',
+  expiration_days: parseInt(process.env.S3_EXPIRATION_DAYS || '1')
 };
 
 config.backends = {
@@ -36,16 +35,3 @@ config.regions = {
     location: 'us-west-2'
   }
 };
-
-if (!config.s3.key) {
-  console.error('Error: AWS_ACCESS_KEY not set');
-  process.exit(1);
-}
-
-if (!config.s3.secret) {
-  console.error('Error: AWS_SECRET_KEY not set');
-  process.exit(1);
-}
-
-delete process.env.AWS_ACCESS_KEY;
-delete process.env.AWS_SECRET_KEY;

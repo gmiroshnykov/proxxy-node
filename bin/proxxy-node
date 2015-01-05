@@ -1,0 +1,30 @@
+#!/usr/bin/env node
+var app = require('..');
+app.start().then(function(server) {
+  var address = server.address();
+  console.log("listening on %s:%d", address.address, address.port);
+}).catch(function(err) {
+  console.error(err.stack);
+  process.exit(1);
+});
+
+process.once('SIGINT', gracefulShutdown.bind(null, 'SIGINT'));
+process.once('SIGUSR2', gracefulShutdown.bind(null, 'SIGUSR2'));
+
+function gracefulShutdown(signal) {
+  console.error('shutting down gracefully...');
+  app.stop().then(function() {
+    process.kill(process.pid, signal);
+  }, function(err) {
+    console.error('Error during graceful shutdown:');
+    console.error(err.stack);
+    process.kill(process.pid, signal);
+  });
+
+  setTimeout(forceShutdown.bind(null, signal), 30 * 1000);
+}
+
+function forceShutdown(signal) {
+  console.error('graceful shutdown is taking too long, forcing hard shutdown...');
+  process.kill(process.pid, signal);
+}
