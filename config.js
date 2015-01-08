@@ -35,3 +35,5 @@ config.regions = {
     location: 'us-west-2'
   }
 };
+
+config.gracefulShutdownTimeout = parseInt(process.env.GRACEFUL_SHUTDOWN_TIMEOUT || '30000', 10);

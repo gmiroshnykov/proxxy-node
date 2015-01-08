@@ -5,13 +5,14 @@
   "repository": "git@github.com:laggyluke/proxxy-node.git",
   "main": "lib/app.js",
   "scripts": {
-    "start": "node --harmony index.js"
+    "start": "node --harmony ./bin/proxxy-node"
   },
   "dependencies": {
     "aws-sdk": "^2.1.4",
     "co": "^4.1.0",
     "debug": "^2.1.1",
     "koa": "^0.14.0",
+    "koa-logger": "^1.2.2",
     "thunkify": "^2.1.2"
   },
   "devDependencies": {

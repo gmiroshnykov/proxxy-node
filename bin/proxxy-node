@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 var app = require('..');
+var config = require('../config');
+
 app.start().then(function(server) {
   var address = server.address();
   console.log("listening on %s:%d", address.address, address.port);
@@ -21,7 +23,7 @@ function gracefulShutdown(signal) {
     process.kill(process.pid, signal);
   });
 
-  setTimeout(forceShutdown.bind(null, signal), 30 * 1000);
+  setTimeout(forceShutdown.bind(null, signal), config.gracefulShutdownTimeout);
 }
 
 function forceShutdown(signal) {
